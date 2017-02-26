@@ -1,30 +1,26 @@
 # -*- coding: utf-8 -*-
 
-import codecs
-import csv
 import numpy as np
-import pandas
-from sklearn.tree import DecisionTreeClassifier
+import pandas as pd
+
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestClassifier
-# from sklearn.model_selection import train_test_split, KFold, cross_val_score
-from sklearn.metrics import classification_report, f1_score
+
 from sklearn import cross_validation
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, f1_score
+from sklearn.feature_selection import SelectKBest, f_classif
 
 
 def read_titanic(filename='titanic.csv'):
 	""" Функция читает csv файл"""
-	df = pandas.read_csv(filename, index_col='PassengerId')
+	df = pd.read_csv(filename, index_col='PassengerId')
 	df.head()
 
 	print(df.describe())
 	print("The median age is {} years".format(df['Age'].median()))
 
-	df = df.dropna()
-	x_labels = ['Pclass', 'Fare', 'Age', 'Sex']
-	X, y = df[x_labels], df['Survived']
-	X['Sex'] = X['Sex'].map({'female': 0, 'male': 1}).astype(int)  # замена female и male на 0 и 1 соответственно
-	return df, X, y, x_labels
+	return df
 
 
 def get_dependence1(df):
@@ -67,19 +63,45 @@ def get_dependence2(df):
 	plt.show()
 	print(
 		'У пассажира женского пола первого класса самая высокая вероятность выжить. \nУ женщин первого и второго класса '
-		'вероятности выжить примерно в 2 раза больше чем у мужчин их же класса. \nУ мужчин и женщин третьего класса '
+		'вероятности выжить больше чем у мужчин их же класса. \nУ мужчин и женщин третьего класса '
 		'примерно одинаковая вероятность выжить. ')
 
 	print('P(выжить|женщина, 1 класс) > P(выжить|мужчина, 1 класс)')
 	print('P(выжить,женщина) > P(выжить, мужчина)')
 
 
-def train_and_check_model(model, parameter):
+def clean_data(df):
+
+	x_labels = ['Pclass', 'Fare', 'Age', 'Sex', 'SibSp', 'Relatives', 'Single', 'Embarked'] 	# параметры
+	# Из графиков видно, что пол, класс играют важную роль в решении того, выживет ли человек. Можно также предположить,
+	# что наличие семьи тоже играет положительную роль при принятии решении о том, кого посадить вместе
+
+	# df_sex = pd.get_dummies(df['Sex'])
+	# df = pd.concat([df, df_sex], axis=1)
+
+	df['Sex'] = df['Sex'].map({'female': 0, 'male': 1}).astype(int)  # замена female и male на 0 и 1 соответственно
+
+	embarkments = {"U": 0, "S": 1, "C": 2, "Q": 3}
+	df["Embarked"] = df["Embarked"].fillna("U").apply(lambda e: embarkments.get(e))
+	print(df["Embarked"])
+
+	df["Relatives"] = df["Parch"] + df["SibSp"]		# новая категория - сколько всего родственников у человека
+
+	df["Single"] = df["Relatives"].apply(lambda r: 1 if r == 0 else 0)   # является ли человек одиночкой
+
+	df = df.dropna()
+
+	X, y = df[x_labels], df['Survived']
+
+	return X, y, x_labels
+
+
+def train_and_check_model(X_train, X_test, y_train, y_test, model, parameter, x_labels):
 	""" Обучение модели и подбор наиболее удачных параментов"""
 	clf = model(min_samples_split=parameter)
 	clf.fit(np.array(X_train), np.array(y_train))
 
-	importances = pandas.Series(clf.feature_importances_, index=x_labels)
+	importances = pd.Series(clf.feature_importances_, index=x_labels)
 	print(importances)
 
 	y_pred = clf.predict(X_test)
@@ -100,12 +122,10 @@ def train_and_check_model(model, parameter):
 	plt.ylabel('score')
 	plt.show()
 
-	# Extra: использовать grid search для варьирования параметров
-
 
 if __name__ == '__main__':
 
-	df, X, y, x_labels = read_titanic()
+	df = read_titanic()
 
 	print('=' * 60)
 	print('1. Зависимость выживания от параметров Sex, Pclass, Fare')
@@ -123,20 +143,33 @@ if __name__ == '__main__':
 	print(u'2. Очистка данных')
 	print('-' * 60)
 
+	X, y, x_labels = clean_data(df)
+
+	print('Подбор наиболее удачного параметра')
+
+	selector = SelectKBest(f_classif, k=5)
+	selector.fit(X, y)
+
+	scores = -np.log10(selector.pvalues_)
+
+	plt.bar(range(len(x_labels)), scores)
+	plt.xticks(range(len(x_labels)), x_labels, rotation='vertical')
+	plt.show()
+
 	print('=' * 60)
-	print(u'2. Разделить данные на тестовую и обучающую выборку')
+	print(u'2. Разделить данные на тестовую и обучающую выборку и обучить DecisionTreeClassifier')
 	print('-' * 60)
 
 	X_train, X_test, y_train, y_test = cross_validation.train_test_split(X, y, test_size=0.3)
 	print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
 
-	train_and_check_model(DecisionTreeClassifier, 5)
+	train_and_check_model(X_train, X_test, y_train, y_test, DecisionTreeClassifier, 5, x_labels)
 
 	print('=' * 60)
 	print(u'2. То же самое для RandomForest')
 	print('-' * 60)
 
-	train_and_check_model(RandomForestClassifier, 100)
+	train_and_check_model(X_train, X_test, y_train, y_test, RandomForestClassifier, 100, x_labels)
 
 
 
