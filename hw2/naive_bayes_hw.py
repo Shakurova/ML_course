@@ -156,6 +156,9 @@ def warning_words(text):
 
 
 class FunctionFeaturizer(TransformerMixin):
+	""" Для создания своего вектора я использовала несколько фич: длину текста, количество заглавных букв
+	 (чем больше, тем обычно выше вероятность, что это спам), количество ! (в спам-сообщениях встречаются часто),
+	 количество чисел, сколько слов из словаря спам-слов (50 самых частых слов в коллекции спам-сообщений)"""
 	def __init__(self, *featurizers):
 		self.featurizers = featurizers
 
@@ -237,8 +240,14 @@ if __name__ == '__main__':
 
 	# Первая токенизация, Байес
 	print('\n1) Naive Bayes,  tokenize 1')
-	do_smth_with_model(steps=[('bow', CountVectorizer(analyzer=tokenize)),
+	pipeline, label_predicted = do_smth_with_model(steps=[('bow', CountVectorizer(analyzer=tokenize)),
 							  ('classifier', MultinomialNB())])
+
+	draw_learning_curve(pipeline)
+	draw_roc_curve(label_predicted)
+	print('Судя по roc-curve, классификатор показывает высокие результаты, AUC-value очень высокий, roc-curve почти параллельна оси х')
+	print('Learning curve показывает, что при увеличении обучающих данных, cross-validation score может незначительно '
+		  'улучшиться, training score при этом останется статичен')
 
 
 	# Вторая токенизация, Байес
@@ -271,6 +280,10 @@ if __name__ == '__main__':
 
 	draw_learning_curve(pipeline)
 	draw_roc_curve(label_predicted)
+	print('Learning curve показывает, что при увеличении обучающих данных, cross-validation score может незначительно '
+		  'улучшиться, training score при этом останется статичен')
+	print('Судя по roc-curve, классификатор показывает высокие результаты, но у наивного байесы было лучше '
+		  '(надо смотреть на наклон синей прямой). AUC-value хуже, чем у Байеса, лучше, чем у случайного леса ')
 
 	# Случайный лес, tf-idf
 	print('\nRandomForestClassifier')
@@ -280,11 +293,14 @@ if __name__ == '__main__':
 
 	draw_learning_curve(pipeline)
 	draw_roc_curve(label_predicted)
+	print('Learning curve показывает, что при увеличение обучающих данных практически ничего не даст')
+	print('AUC-value равен достаточно высокий, но хуже, чем у наивного байеса и случайного леса')
 
 	# Свой векторизатор
 	print('\nCustom Transformer')
 	pipeline, label_predicted = do_smth_with_model(steps=[('custom', spam_featurizer),
 							  ('classifier', MultinomialNB())])
 
-	draw_learning_curve(pipeline)
-	draw_roc_curve(label_predicted)
+
+	print('Все вышеописанные классификаторы дают достаточно высокие результаты. fit_prior=False результаты не улучшает.'
+		  'У Random forest самый высокий Precision у 1. Наивный байес дал лучшие результаты, чем случайный лес и дерево решений')
