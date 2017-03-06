@@ -210,6 +210,8 @@ if __name__ == '__main__':
 	print(ham)
 	print(spam)
 
+	print(messages.groupby('label').describe())
+
 	print('\nВыборка несбалансированна, неспам - 4825, спам - 747, примеров спама гораздо меньше')
 
 	# перевод str в int (ham->0, spam->1)
